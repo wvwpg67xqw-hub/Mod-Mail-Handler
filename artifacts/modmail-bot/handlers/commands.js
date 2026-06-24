@@ -54,13 +54,16 @@ async function handleCommand(message, client) {
     case 'snippet':
       await cmdSnippet(message, client, args, thread);
       break;
-    default:
-      // Check if it's a snippet shortcut: .snippetname
+    default: {
+      // .snippetname — e.g. .accept sends the "accept" snippet
       const snippet = storage.getSnippet(command);
       if (snippet && thread) {
         await sendSnippet(message, client, snippet, thread);
+      } else if (snippet && !thread) {
+        message.reply('❌ This channel is not an active modmail thread.');
       }
       break;
+    }
   }
 }
 
