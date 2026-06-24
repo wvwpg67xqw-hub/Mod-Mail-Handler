@@ -27,10 +27,10 @@ function anonymousReplyEmbed(content) {
     .setFooter({ text: 'Anonymous Staff Reply' });
 }
 
-function dmStaffReplyEmbed(content, anonymous) {
+function dmStaffReplyEmbed(content) {
   return new EmbedBuilder()
     .setColor(0x57F287)
-    .setAuthor({ name: anonymous ? 'Staff' : 'Staff Reply' })
+    .setAuthor({ name: 'Staff Reply' })
     .setDescription(content)
     .setTimestamp();
 }

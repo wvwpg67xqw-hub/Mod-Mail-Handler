@@ -14,8 +14,7 @@ async function hasAccess(member, config) {
 
 async function handleCommand(message, client) {
   if (!message.content.startsWith(PREFIX)) {
-    // Plain message in modmail channel → forward to user
-    await forwardToUser(message, client, false);
+    await forwardToUser(message, client);
     return;
   }
 
@@ -43,7 +42,7 @@ async function handleCommand(message, client) {
       await cmdBye(message, client, thread);
       break;
     case 'setup':
-      await cmdSetup(message, args, client);
+      await cmdSetup(message, client);
       break;
     case 'a':
       await cmdHelp(message);
@@ -55,7 +54,7 @@ async function handleCommand(message, client) {
       await cmdSnippet(message, client, args, thread);
       break;
     default: {
-      // .snippetname — e.g. .accept sends the "accept" snippet
+      // .snippetname — e.g. .accept sends the "accept" snippet directly
       const snippet = storage.getSnippet(command);
       if (snippet && thread) {
         await sendSnippet(message, client, snippet, thread);
@@ -67,19 +66,14 @@ async function handleCommand(message, client) {
   }
 }
 
-async function forwardToUser(message, client, anonymous) {
+async function forwardToUser(message, client) {
   const thread = storage.getThreadByChannel(message.channel.id);
   if (!thread) return;
 
   try {
     const user = await client.users.fetch(thread.userId);
-    if (anonymous) {
-      await user.send({ embeds: [dmAnonReplyEmbed(message.content.slice('.ar'.length + 1))] });
-      await message.channel.send({ embeds: [anonymousReplyEmbed(message.content.slice('.ar'.length + 1))] });
-    } else {
-      await user.send({ embeds: [dmStaffReplyEmbed(message.content, false)] });
-      await message.channel.send({ embeds: [staffReplyEmbed(message.member, message.content)] });
-    }
+    await user.send({ embeds: [dmStaffReplyEmbed(message.content, false)] });
+    await message.channel.send({ embeds: [staffReplyEmbed(message.member, message.content)] });
     await message.delete().catch(() => {});
   } catch (err) {
     console.error('Error forwarding message:', err);
@@ -128,7 +122,6 @@ async function cmdBye(message, client, thread) {
 
     await message.channel.send('👋 Bye message sent. This thread will be **closed in 1 hour**.');
 
-    // Cancel any existing timer for this channel
     if (byeTimers.has(message.channel.id)) {
       clearTimeout(byeTimers.get(message.channel.id));
     }
@@ -144,7 +137,7 @@ async function cmdBye(message, client, thread) {
       storage.deleteThread(message.channel.id);
       await message.channel.send('🔒 Auto-closing thread now...').catch(() => {});
       setTimeout(() => message.channel.delete().catch(() => {}), 3000);
-    }, 60 * 60 * 1000); // 1 hour
+    }, 60 * 60 * 1000);
 
     byeTimers.set(message.channel.id, timer);
   } catch (err) {
@@ -153,29 +146,29 @@ async function cmdBye(message, client, thread) {
   }
 }
 
-async function cmdSetup(message, args, client) {
+async function cmdSetup(message, client) {
   if (!message.member.permissions.has('Administrator')) {
     return message.reply('❌ Only Administrators can use `.setup`.');
   }
 
-  const embed = {
-    color: 0x5865F2,
-    title: '⚙️ Modmail Setup',
-    description: [
-      'React or reply with the setup option you want to configure:',
-      '',
-      '**1️⃣** — Set **ping role** (role pinged when a new modmail opens)',
-      '**2️⃣** — Set **access role** (role that can use modmail commands)',
-      '**3️⃣** — Set **modmail category** (where channels are created)',
-      '**4️⃣** — View current config',
-    ].join('\n'),
-  };
+  const setupMsg = await message.channel.send({
+    embeds: [{
+      color: 0x5865F2,
+      title: '⚙️ Modmail Setup',
+      description: [
+        'React with the option you want to configure:',
+        '',
+        '**1️⃣** — Set **ping role** (pinged when a new modmail opens)',
+        '**2️⃣** — Set **access role** (who can use modmail commands)',
+        '**3️⃣** — Set **modmail category** (where channels are created)',
+        '**4️⃣** — View current config',
+      ].join('\n'),
+    }],
+  });
 
-  const setupMsg = await message.channel.send({ embeds: [embed] });
-  await setupMsg.react('1️⃣');
-  await setupMsg.react('2️⃣');
-  await setupMsg.react('3️⃣');
-  await setupMsg.react('4️⃣');
+  for (const emoji of ['1️⃣', '2️⃣', '3️⃣', '4️⃣']) {
+    await setupMsg.react(emoji);
+  }
 
   const filter = (reaction, user) =>
     ['1️⃣', '2️⃣', '3️⃣', '4️⃣'].includes(reaction.emoji.name) && user.id === message.author.id;
@@ -203,14 +196,13 @@ async function cmdSetup(message, args, client) {
     const prompts = {
       '1️⃣': 'Mention the **ping role** (e.g. `@Mods`):',
       '2️⃣': 'Mention the **access role** (e.g. `@Staff`):',
-      '3️⃣': 'Send the **category channel ID** where modmail threads will be created:',
+      '3️⃣': 'Send the **category ID** where modmail channels will be created:',
     };
 
     await message.channel.send(prompts[choice]);
 
     const msgFilter = m => m.author.id === message.author.id;
     const collected = await message.channel.awaitMessages({ filter: msgFilter, max: 1, time: 30000 });
-
     if (!collected.size) return message.channel.send('❌ Setup timed out.');
 
     const response = collected.first();
@@ -228,7 +220,7 @@ async function cmdSetup(message, args, client) {
     } else if (choice === '3️⃣') {
       const catId = response.content.trim();
       const cat = message.guild.channels.cache.get(catId);
-      if (!cat) return message.channel.send('❌ Category not found. Make sure you sent the correct ID.');
+      if (!cat) return message.channel.send('❌ Category not found. Double-check the ID.');
       storage.setConfig({ categoryId: catId });
       message.channel.send(`✅ Modmail category set to **${cat.name}**.`);
     }
@@ -243,47 +235,36 @@ async function cmdHelp(message) {
   const snippets = storage.getSnippets();
   const snippetList = Object.keys(snippets);
 
-  const embed = {
-    color: 0x5865F2,
-    title: '📖 Modmail Commands & Snippets',
-    fields: [
-      {
-        name: '📨 Replies',
-        value: [
-          '`[message]` — Reply to user (with your name)',
-          '`.ar <message>` — Anonymous reply (no name shown)',
-        ].join('\n'),
-      },
-      {
-        name: '🔖 Snippets',
-        value: [
-          '`.s` — List all snippets',
-          '`.snippet <name>` — Use a snippet',
-          '`.snippet add <name> <content>` — Add a snippet',
-          '`.snippet remove <name>` — Remove a snippet',
-        ].join('\n'),
-      },
-      {
-        name: '🔒 Thread',
-        value: [
-          '`.close` — Close this thread immediately',
-          '`.bye` — Send bye message & close in 1 hour',
-        ].join('\n'),
-      },
-      {
-        name: '⚙️ Admin',
-        value: '`.setup` — Configure ping role, access role, and category',
-      },
-      {
-        name: `📝 Saved Snippets (${snippetList.length})`,
-        value: snippetList.length
-          ? snippetList.map(n => `\`.${n}\``).join(', ')
-          : 'No snippets saved yet. Use `.snippet add <name> <content>`.',
-      },
-    ],
-  };
-
-  message.channel.send({ embeds: [embed] });
+  message.channel.send({
+    embeds: [{
+      color: 0x5865F2,
+      title: '📖 Modmail Commands & Snippets',
+      fields: [
+        {
+          name: '📨 Replies',
+          value: '`[message]` — Reply to user (with your name)\n`.ar <message>` — Anonymous reply (no name shown)',
+        },
+        {
+          name: '🔖 Snippets',
+          value: '`.accept` — Use snippet named "accept"\n`.s` — List all snippets\n`.snippet add <name> <content>` — Add a snippet\n`.snippet remove <name>` — Remove a snippet',
+        },
+        {
+          name: '🔒 Thread',
+          value: '`.close` — Close this thread immediately\n`.bye` — Send bye message & close in 1 hour',
+        },
+        {
+          name: '⚙️ Admin',
+          value: '`.setup` — Configure ping role, access role, and category',
+        },
+        {
+          name: `📝 Saved Snippets (${snippetList.length})`,
+          value: snippetList.length
+            ? snippetList.map(n => `\`.${n}\``).join(', ')
+            : 'No snippets yet. Use `.snippet add <name> <content>`.',
+        },
+      ],
+    }],
+  });
 }
 
 async function cmdListSnippets(message) {
@@ -294,42 +275,40 @@ async function cmdListSnippets(message) {
     return message.channel.send('📝 No snippets saved yet. Add one with `.snippet add <name> <content>`.');
   }
 
-  const embed = {
-    color: 0x5865F2,
-    title: `📝 Snippets (${entries.length})`,
-    description: entries.map(([name, content]) => `**\`.${name}\`**\n${content}`).join('\n\n'),
-  };
-
-  message.channel.send({ embeds: [embed] });
+  message.channel.send({
+    embeds: [{
+      color: 0x5865F2,
+      title: `📝 Snippets (${entries.length})`,
+      description: entries.map(([name, content]) => `**\`.${name}\`**\n${content}`).join('\n\n'),
+    }],
+  });
 }
 
 async function cmdSnippet(message, client, args, thread) {
   const sub = args.shift()?.toLowerCase();
 
-  if (!sub) return message.reply('❌ Usage: `.snippet <name>` | `.snippet add <name> <content>` | `.snippet remove <name>`');
+  if (!sub) return message.reply('❌ Usage: `.snippet add <name> <content>` | `.snippet remove <name>`');
 
   if (sub === 'add') {
     const name = args.shift()?.toLowerCase();
     const content = args.join(' ');
     if (!name || !content) return message.reply('❌ Usage: `.snippet add <name> <content>`');
     storage.addSnippet(name, content);
-    return message.reply(`✅ Snippet **\`.${name}\`** saved.`);
+    return message.reply(`✅ Snippet **\`.${name}\`** saved. Use it with \`.${name}\`.`);
   }
 
   if (sub === 'remove') {
     const name = args.shift()?.toLowerCase();
     if (!name) return message.reply('❌ Usage: `.snippet remove <name>`');
-    const existing = storage.getSnippet(name);
-    if (!existing) return message.reply(`❌ Snippet **\`.${name}\`** not found.`);
+    if (!storage.getSnippet(name)) return message.reply(`❌ Snippet **\`.${name}\`** not found.`);
     storage.removeSnippet(name);
     return message.reply(`✅ Snippet **\`.${name}\`** removed.`);
   }
 
-  // Use snippet by name
+  // .snippet <name> — use a snippet
   const snippet = storage.getSnippet(sub);
-  if (!snippet) return message.reply(`❌ Snippet **\`.${sub}\`** not found. Use \`.s\` to see all snippets.`);
+  if (!snippet) return message.reply(`❌ Snippet **\`.${sub}\`** not found. Use \`.s\` to list all snippets.`);
   if (!thread) return message.reply('❌ This channel is not an active modmail thread.');
-
   await sendSnippet(message, client, snippet, thread);
 }
 

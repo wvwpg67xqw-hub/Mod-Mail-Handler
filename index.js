@@ -29,13 +29,11 @@ client.once('ready', () => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  // DM → open or continue thread
   if (!message.guild) {
     await handleDM(message, client);
     return;
   }
 
-  // Guild message in a modmail channel
   const thread = storage.getThreadByChannel(message.channel.id);
   const isSetupOrHelp = message.content.match(/^\.(setup|a|s|snippet)/i);
 

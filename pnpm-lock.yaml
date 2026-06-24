@@ -153,6 +153,13 @@ overrides:
 importers:
 
   .:
+    dependencies:
+      discord.js:
+        specifier: ^14.16.3
+        version: 14.26.4
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.6.1
     devDependencies:
       prettier:
         specifier: ^3.8.3

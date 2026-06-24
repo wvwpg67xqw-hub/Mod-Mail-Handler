@@ -15,7 +15,6 @@ async function handleDM(message, client) {
   const guild = client.guilds.cache.get(guildId);
   if (!guild) return message.reply('❌ Could not find the server. Please contact a staff member.');
 
-  // Check for existing thread
   let thread = storage.getThreadByUser(message.author.id);
   if (thread) {
     const channel = guild.channels.cache.get(thread.channelId);
@@ -24,13 +23,11 @@ async function handleDM(message, client) {
       await message.react('✅');
       return;
     } else {
-      // Channel was deleted externally, clean up
       storage.deleteThread(thread.channelId);
       thread = null;
     }
   }
 
-  // Create new thread
   try {
     let category = null;
     if (config.categoryId) {
@@ -58,11 +55,9 @@ async function handleDM(message, client) {
 
     storage.createThread(channel.id, message.author.id, message.author.tag);
 
-    // Send open embed + first message
     await channel.send({ embeds: [openedEmbed(message.author)] });
     await channel.send({ embeds: [userMessageEmbed({ user: message.author }, message.content)] });
 
-    // Ping role if configured
     if (config.pingRoleId) {
       await channel.send(`<@&${config.pingRoleId}> — New modmail thread opened.`);
     }
