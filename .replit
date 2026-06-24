@@ -29,7 +29,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "node index.js"
+args = "if [ -f /home/container/package.json ]; then npm install; fi; node index.js"
 
 [agent]
 stack = "PNPM_WORKSPACE"
