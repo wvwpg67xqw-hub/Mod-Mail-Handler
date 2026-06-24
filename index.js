@@ -1,4 +1,4 @@
-require('dotenv').config();
+try { require('dotenv').config(); } catch {}
 
 const { Client, GatewayIntentBits, Partials } = require('discord.js');
 const { handleDM } = require('./handlers/dm');
