@@ -14,7 +14,7 @@ async function hasAccess(member, config) {
 
 async function handleCommand(message, client) {
   if (!message.content.startsWith(PREFIX)) {
-    await forwardToUser(message, client);
+    // Plain messages are ignored — use .r or .ar to reply
     return;
   }
 
@@ -32,6 +32,9 @@ async function handleCommand(message, client) {
   }
 
   switch (command) {
+    case 'r':
+      await cmdReply(message, client, args, thread);
+      break;
     case 'ar':
       await cmdAnonReply(message, client, args, thread);
       break;
@@ -66,18 +69,19 @@ async function handleCommand(message, client) {
   }
 }
 
-async function forwardToUser(message, client) {
-  const thread = storage.getThreadByChannel(message.channel.id);
-  if (!thread) return;
+async function cmdReply(message, client, args, thread) {
+  const content = args.join(' ');
+  if (!content) return message.reply('❌ Usage: `.r <message>`');
+  if (!thread) return message.reply('❌ This channel is not an active modmail thread.');
 
   try {
     const user = await client.users.fetch(thread.userId);
-    await user.send({ embeds: [dmStaffReplyEmbed(message.content, false)] });
-    await message.channel.send({ embeds: [staffReplyEmbed(message.member, message.content)] });
+    await user.send({ embeds: [dmStaffReplyEmbed(content, false)] });
+    await message.channel.send({ embeds: [staffReplyEmbed(message.member, content)] });
     await message.delete().catch(() => {});
   } catch (err) {
-    console.error('Error forwarding message:', err);
-    message.reply('❌ Could not send message to the user.');
+    console.error('Error sending reply:', err);
+    message.reply('❌ Could not send the reply to the user.');
   }
 }
 
@@ -242,7 +246,7 @@ async function cmdHelp(message) {
       fields: [
         {
           name: '📨 Replies',
-          value: '`[message]` — Reply to user (with your name)\n`.ar <message>` — Anonymous reply (no name shown)',
+          value: '`.r <message>` — Reply to user (with your name)\n`.ar <message>` — Anonymous reply (no name shown)',
         },
         {
           name: '🔖 Snippets',
